@@ -1,0 +1,795 @@
+# RabitMQ
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:      
+      containers:
+        - name: rabbitmq   
+          image: rabbitmq:3.9-management   
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap                    
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+spec:
+  type: ClusterIP
+  selector:
+    app: rabbitmq
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: rabbitmq
+      port: 5672
+      targetPort: 5672
+    - name: rabbitmq-management
+      port: 15672
+      targetPort: 15672
+
+---
+#CRUX
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crux
+  template:
+    metadata:
+      labels:
+        app: crux
+    spec:      
+      containers:
+        - name: crux          
+          image: juxt/xtdb-standalone-rocksdb:1.21.0         
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap       
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+          volumeMounts:
+            - name: xtdb-data
+              mountPath: /usr/lib/xtdb/data
+      volumes:
+        - name: xtdb-data
+          persistentVolumeClaim:
+            claimName: xtdb-data
+
+---
+#OCTOPOES
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octopoes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octopoes
+  template:
+    metadata:
+      labels:
+        app: octopoes
+    spec:      
+      containers:
+        - name: octopoes-api
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          image: ghcr.io/minvws/nl-kat-octopoes:v1.2.3
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: octopoes
+spec:
+  type: ClusterIP
+  selector:
+    app: octopoes
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: octopoes
+      port: 80
+      targetPort: 8000
+---
+#OCTOPOES
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octopoes-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octopoes-worker
+  template:
+    metadata:
+      labels:
+        app: octopoes-worker
+    spec:      
+      containers:
+        - name: octopoes-worker
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          image: ghcr.io/minvws/nl-kat-octopoes:v1.2.3
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+# Boefje
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boefje
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boefje
+  template:
+    metadata:
+      labels:
+        app: boefje
+    spec:      
+      containers:
+        - name: boefje
+          image: ghcr.io/minvws/nl-kat-boefjes:v1.2.3
+          command: ["python3", "-m", "boefjes", "boefje"]
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+# Normalizer
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: normalizer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: normalizer
+  template:
+    metadata:
+      labels:
+        app: normalizer
+    spec:      
+      containers:
+        - name: normalizer
+          image: ghcr.io/minvws/nl-kat-boefjes:v1.2.3
+          command: ["python3", "-m", "boefjes", "normalizer"]
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+#Rocky DB
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocky-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocky-db
+  template:
+    metadata:
+      labels:
+        app: rocky-db
+    spec:
+      # securityContext:
+      #   fsGroup: 999      
+      containers:
+        - name: rocky-db
+          image: postgres:12.8
+
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          env:
+          - name: APP_DB
+            value: $APP_DB 
+          - name: APP_DB_USER
+            value: $ROCKY_DB_USER 
+          - name: APP_DB_PASSWORD
+            value: $ROCKY_DB_PASSWORD
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+          volumeMounts:
+            - name: rocky-db
+              mountPath: /var/lib/postgresql/data
+            - name: init-user-db
+              mountPath: /docker-entrypoint-initdb.d/
+      volumes:
+        - name: rocky-db
+          persistentVolumeClaim:
+            claimName: rocky-db
+        - name: init-user-db
+          configMap:
+            name: init-user-db
+            items:
+            - key: init-user-db.sh
+              path: init-user-db.sh
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocky-db
+spec:
+  type: ClusterIP
+  selector:
+    app: rocky-db
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: rocky-db
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocky
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocky
+  template:
+    metadata:
+      labels:
+        app: rocky
+    spec:      
+      containers:
+        - name: rocky
+          image: "ghcr.io/minvws/nl-kat-rocky:v1.2.3"
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          # env:
+          #   - name: DATABASE_MIGRATION
+          #     value: "True"
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocky
+spec:
+  type: ClusterIP
+  selector:
+    app: rocky
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: rocky
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:  
+  name: openkat-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  tls:
+  - hosts:
+      - ""
+    #secretName: tls-secret
+  rules:
+  - host: ""
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: rocky
+            port: 
+              number: 8000
+---
+#bytes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bytes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bytes
+  template:
+    metadata:
+      labels:
+        app: bytes
+    spec:      
+      containers:
+        - name: bytes
+          image: "ghcr.io/minvws/nl-kat-bytes:v1.2.3"
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          env:
+            - name: BYTES_DATA_DIR
+              value: /data
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+          volumeMounts:
+            - name: bytes
+              mountPath: /data
+      volumes:
+        - name: bytes
+          persistentVolumeClaim:
+            claimName: bytes-data
+---
+#bytes-db
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bytes-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bytes-db
+  template:
+    metadata:
+      labels:
+        app: bytes-db
+    spec:    
+      containers:
+        - name: bytes-db
+          image: postgres:12.8
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          env:
+          - name: APP_DB
+            value: $BYTES_DB 
+          - name: APP_DB_USER
+            value: $BYTES_DB_USER 
+          - name: APP_DB_PASSWORD
+            value: $BYTES_DB_PASSWORD
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+          volumeMounts:
+            - name: bytes-db
+              mountPath: /var/lib/postgresql/data
+            - name: init-user-db
+              mountPath: /docker-entrypoint-initdb.d/
+      volumes:
+        - name: bytes-db
+          persistentVolumeClaim:
+            claimName: bytes-db
+        - name: init-user-db
+          configMap:
+            name: init-user-db
+            items:
+            - key: init-user-db.sh
+              path: init-user-db.sh
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bytes-db
+spec:
+  type: ClusterIP
+  selector:
+    app: bytes-db
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: bytes-db
+      port: 5433
+      targetPort: 5432
+---
+#katalogus
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katalogus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katalogus
+  template:
+    metadata:
+      labels:
+        app: katalogus
+    spec:      
+      containers:
+        - name: katalogus
+          image: "ghcr.io/minvws/nl-kat-boefjes:v1.2.3"
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          # env:
+          #   - name: DATABASE_MIGRATION
+          #     value: "true"
+          ports:
+            - containerPort: 8000
+          command: ["python3", "-m", "uvicorn","--host", "0.0.0.0", "boefjes.katalogus.api:app"]
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: katalogus
+spec:
+  type: ClusterIP
+  selector:
+    app: katalogus
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: katalogus
+      port: 8000
+      targetPort: 8000
+---
+#katalogus-db
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katalogus-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katalogus-db
+  template:
+    metadata:
+      labels:
+        app: katalogus-db
+    spec:    
+      containers:
+        - name: katalogus-db
+          image: postgres:12.8
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          env:
+          - name: APP_DB
+            value: $KATALOGUS_DB 
+          - name: APP_DB_USER
+            value: $KATALOGUS_DB_USER
+          - name: APP_DB_PASSWORD
+            value: $KATALOGUS_DB_USER 
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+          volumeMounts:
+            - name: katalogus-db
+              mountPath: /var/lib/postgresql/data
+            - name: init-user-db
+              mountPath: /docker-entrypoint-initdb.d/
+      volumes:
+        - name: katalogus-db
+          persistentVolumeClaim:
+            claimName: katalogus-db
+        - name: init-user-db
+          configMap:
+            name: init-user-db
+            items:
+            - key: init-user-db.sh
+              path: init-user-db.sh
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: katalogus-db
+spec:
+  type: ClusterIP
+  selector:
+    app: katalogus-db
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: katalogus
+      port: 5432 
+      targetPort: 5432
+---
+#scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+    spec:      
+      containers:
+        - name: scheduler
+          image: "ghcr.io/minvws/nl-kat-mula:v1.2.3"
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+spec:
+  type: ClusterIP
+  selector:
+    app: scheduler
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: scheduler
+      port: 8004 
+      targetPort: 8000
+---
+#keiko
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keiko
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keiko
+  template:
+    metadata:
+      labels:
+        app: keiko
+    spec:      
+      containers:
+        - name: keiko
+          image: "ghcr.io/minvws/nl-kat-keiko:v1.2.3"
+          envFrom:
+            - configMapRef: 
+                name: openkat-configmap
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "1.0"
+              memory: "1024Mi"
+            requests:
+              cpu: "0.05"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keiko
+spec:
+  type: ClusterIP
+  selector:
+    app: keiko
+  ports:
+    # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - name: keiko
+      port: 8005
+      targetPort: 8000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-user-db
+data: 
+  init-user-db.sh: |
+    #!/bin/bash
+    # Reference: https://hub.docker.com/_/postgres
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+            CREATE USER ${APP_DB_USER} WITH ENCRYPTED PASSWORD '${APP_DB_PASSWORD}';
+            CREATE DATABASE ${APP_DB};
+            ALTER DATABASE ${APP_DB} OWNER TO ${APP_DB_USER};
+    EOSQL
+---
+# GLOBAL vars
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openkat-configmap
+data:
+  # Postgresql
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: ""
+
+  # General
+  # DATABASE_MIGRATION: "True"
+
+  # Rocky
+  SECRET_KEY: ""
+  DEBUG: "True"
+  TWOFACTOR_ENABLED: "True"
+
+  # Rocky DB
+  ROCKY_DB: "rocky"
+  ROCKY_DB_USER: ""
+  ROCKY_DB_PASSWORD: ""
+  ROCKY_DB_HOST: "rocky-db"
+  ROCKY_DB_PORT: "5432"
+
+  # Queueing
+  RABBITMQ_DEFAULT_VHOST: "kat"
+  RABBITMQ_DEFAULT_USER: ""
+  RABBITMQ_DEFAULT_PASS: ""
+
+  QUEUE_NAME_BOEFJES: "boefjes"
+  QUEUE_NAME_NORMALIZERS: "normalizers"
+  QUEUE_URI: "amqp://:@rabbitmq:5672/kat"
+
+  # Endpoints
+  OCTOPOES_API: "http://octopoes:80"
+  BYTES_API: "http://bytes:8000"
+  XTDB_URI: "http://crux:3000"
+  XTDB_TYPE: "xtdb"
+  SCHEDULER_API: "http://scheduler:8000"
+  KEIKO_API: "http://keiko:8000"
+
+  # Boefjes
+  # WP_SCAN_API: 
+  # SHODAN_API: 
+
+  # Bytes API
+  SECRET: ""
+  ACCESS_TOKEN_EXPIRE_MINUTES: "1000"
+  BYTES_USERNAME: ""
+  BYTES_PASSWORD: ""
+
+  # Bytes DB
+  BYTES_DB: "bytes"
+  BYTES_DB_USER: ""
+  BYTES_DB_PASSWORD: ""
+  BYTES_DB_URI: 'postgresql://$BYTES_DB_USER:$BYTES_DB_PASSWORD@bytes-db:5432/bytes'
+
+  # Bytes FileSystem
+  BYTES_FILE_PERMISSION: "640"
+  BYTES_FOLDER_PERMISSION: "740"
+  ENCRYPTION_MIDDLEWARE: "IDENTITY"
+
+  # KATalogus API
+  KATALOGUS_API: "http://katalogus:8000"
+
+  # KATalogus DB
+  KATALOGUS_DB: "katalogus"
+  KATALOGUS_DB_USER: ""
+  KATALOGUS_DB_PASSWORD: ""
+  KATALOGUS_DB_URI: "postgresql://$KATALOGUS_DB_USER:$KATALOGUS_DB_PASSWORD@katalogus-db:5432/katalogus"
+
+  # Miauw API
+  # MIAUW_API_ENABLED: 
+  # MIAUW_BASE_URL: 
+  # MIAUW_USERNAME: 
+  # MIAUW_PASSWORD: 
+
+  # Scheduler
+  SCHEDULER_BOEFJE_POPULATE: "true"
+  SCHEDULER_NORMALIZER_POPULATE: "true"
+  SCHEDULER_PQ_MAXSIZE: "1000"
+  SCHEDULER_PQ_INTERVAL: "60"
+  SCHEDULER_DSP_BROKER_URL: "amqp://:@rabbitmq:5672/kat"
+  SCHEDULER_RABBITMQ_DSN: "amqp://:@rabbitmq:5672/kat"
+  SCHEDULER_DB_DSN: "sqlite:///"
+
+  # Keiko
+  KEIKO_DEBUG: "False"
+  KEIKO_LOG_CFG: "logging.json"
+  KEIKO_TEMPLATES_FOLDER: "templates"
+  KEIKO_GLOSSARIES_FOLDER: "glossaries"
+  KEIKO_REPORTS_FOLDER: "reports"
+  KEIKO_ASSETS_FOLDER: "assets"
+
